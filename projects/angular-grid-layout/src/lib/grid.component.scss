@@ -3,25 +3,28 @@ ktd-grid {
     position: relative;
     width: 100%;
 
-    ktd-grid-item {
-        &.ktd-grid-item-dragging {
-            z-index: 1000;
-        }
 
-        &.no-transitions {
-            transition: none !important;
-        }
-    }
 
     .ktd-grid-item-placeholder {
         position: absolute;
         z-index: 0;
         transition-property: transform;
         transition: all 150ms ease;
-        
+
         &-default {
             background-color: darkred;
             opacity: 0.6;
         }
+    }
+}
+
+ktd-grid-item {
+    &.ktd-grid-item-dragging {
+        z-index: 1000;
+        cursor: grabbing;
+    }
+
+    &.no-transitions {
+        transition: none !important;
     }
 }

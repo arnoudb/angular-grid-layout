@@ -395,10 +395,10 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
 
     /**
      * Perform a general grid drag action, from start to end. A general grid drag action basically includes creating the placeholder element and adding
-     * some class animations. calcNewStateFunc needs to be provided in order to calculate the new state of the layout.
-     * @param gridItem that is been dragged
+     * some class animations.
+     * @param gridItem that is being dragged
      * @param pointerDownEvent event (mousedown or touchdown) where the user initiated the drag
-     * @param calcNewStateFunc function that return the new layout state and the drag element position
+     * @param type the type of drag sequence that is executed (`drag` or `resize`)
      */
     private performDragSequence$(gridItem: KtdGridItemComponent, pointerDownEvent: MouseEvent | TouchEvent, type: DragActionType): Observable<KtdGridLayout> {
 
@@ -407,7 +407,54 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
             const gridElemClientRect: KtdClientRect = getMutableClientRect(this.elementRef.nativeElement as HTMLElement);
             const dragElemClientRect: KtdClientRect = getMutableClientRect(gridItem.elementRef.nativeElement as HTMLElement);
 
-            const scrollableParent = typeof this.scrollableParent === 'string' ? document.getElementById(this.scrollableParent) : this.scrollableParent;
+            const scrollableParent = typeof this.scrollableParent === 'string' ? document.getElementById(this.scrollableParent) as HTMLElement : this.scrollableParent as HTMLElement;
+
+            // Lift the dragged item out of the grid sto be able to drag it outside the grid boundaries.
+            // This also makes sure its always on top of any other element.
+            // Here we also correct the global position it stays visually exactly on the same location.
+            //document.getElementById('draggedgriditem') !== null &&
+            if (document.getElementById('draggedgriditem') === null && type === 'drag') {
+
+                const dragProxy = gridItem.elementRef.nativeElement.cloneNode(true);
+                const renderData = this.getItemRenderData(gridItem.id);
+                console.log(renderData)
+                console.log('renderData', renderData);
+                document.body.appendChild(dragProxy);
+                dragProxy.id = 'draggedgriditem';
+                dragProxy.style.position = 'absolute';
+                dragProxy.style.zIndex = 1000;
+                dragProxy.style.pointerEvents = 'none';
+                dragProxy.style.transform = ''; // replaced by absolute position
+                dragProxy.style.top = (gridElemClientRect.top + renderData.top + window.scrollY) + 'px';
+                dragProxy.style.left = (gridElemClientRect.left + renderData.left + window.scrollX) + 'px';
+                console.log(dragProxy.style.top, dragProxy.style.left,  window.scrollY, window.scrollX, gridElemClientRect.top, renderData.top);
+
+                // dragProxy.dragEnded = true;
+                // dragProxy.st
+                console.log(dragProxy.style.top, (<MouseEvent>pointerDownEvent).clientY + window.scrollY);
+                const deltaX = ((<MouseEvent>pointerDownEvent).clientX + window.scrollX) - (gridElemClientRect.left + renderData.left + window.scrollX);
+                const deltaY = ((<MouseEvent>pointerDownEvent).clientY + window.scrollY) - (gridElemClientRect.top + renderData.top + window.scrollY);
+                const update = (event:MouseEvent) => {
+
+                    dragProxy.style.left = (event.clientX + window.scrollX - deltaX) + 'px';
+                    dragProxy.style.top = (event.clientY + window.scrollY - deltaY) + 'px';
+
+                   // console.log(event.clientX)
+                    console.log(deltaX, deltaY, dragProxy.style.left, dragProxy.style.top)
+                    window.addEventListener('mouseup', () => {
+                        window.removeEventListener('mousemove', update);
+                        //event
+                    });
+                }
+
+                window.addEventListener('mousemove', update);
+
+
+                gridItem.elementRef.nativeElement.style.opacity = .5;
+            } else {
+                //console.log(dragProxy.top, dragProxy.left,  window.scrollY, window.scrollX);
+            }
+            console.log('??')
 
             this.renderer.addClass(gridItem.elementRef.nativeElement, 'no-transitions');
             this.renderer.addClass(gridItem.elementRef.nativeElement, 'ktd-grid-item-dragging');
@@ -438,6 +485,7 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
             /**
              * Main subscription, it listens for 'pointer move' and 'scroll' events and recalculates the layout on each emission
              */
+            let scrollDifferenceStore:{ top: number, left: number };
             const subscription = this.ngZone.runOutsideAngular(() =>
                 merge(
                     combineLatest([
@@ -452,6 +500,7 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                     takeUntil(ktdMouseOrTouchEnd(document)),
                 ).subscribe(([pointerDragEvent, scrollDifference]: [MouseEvent | TouchEvent, { top: number, left: number }]) => {
                         pointerDragEvent.preventDefault();
+                        scrollDifferenceStore = scrollDifference;
 
                         /**
                          * Set the new layout to be the layout in which the calcNewStateFunc would be executed.
@@ -498,6 +547,8 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                         this.placeholder!.style.height = placeholderStyles.height;
                         this.placeholder!.style.transform = `translateX(${placeholderStyles.left}) translateY(${placeholderStyles.top})`;
 
+
+
                         // modify the position of the dragged item to be the once we want (for example the mouse position or whatever)
                         this._gridItemsRenderData[gridItem.id] = {
                             ...draggedItemPos,
@@ -524,6 +575,24 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                     (error) => observer.error(error),
                     () => {
                         this.ngZone.run(() => {
+
+                           document.getElementById('draggedgriditem')?.remove();
+                            gridItem.elementRef.nativeElement.style.display = 'block';
+
+                            // restore the dragged item, do it on `transitionend` so we animate in a top layer
+                            // visually above all other ui.
+                            // TODO check if we actually have a transition, otherwise this may not work
+                            //gridItem.elementRef.nativeElement.style.top = scrollDifferenceStore.top;
+                            //gridItem.elementRef.nativeElement.style.left = scrollDifferenceStore.left;
+                            // gridItem.elementRef.nativeElement.addEventListener('transitionend', (event) => {
+                            //     this.elementRef.nativeElement.appendChild(gridItem.elementRef.nativeElement);
+                            //     gridItem.elementRef.nativeElement.style.position = 'absolute';
+                            //     gridItem.elementRef.nativeElement.style.top = 0;
+                            //     gridItem.elementRef.nativeElement.style.left = 0;
+                            //     //gridItem.elementRef.nativeElement.style.transform = `translateX(-500px) translateY(-500px)`;
+                            //     gridItem.elementRef.nativeElement.id = '';
+                            // });
+
                             // Remove drag classes
                             this.renderer.removeClass(gridItem.elementRef.nativeElement, 'no-transitions');
                             this.renderer.removeClass(gridItem.elementRef.nativeElement, 'ktd-grid-item-dragging');

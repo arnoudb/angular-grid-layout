@@ -1,4 +1,4 @@
-import { Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, Inject, OnDestroy, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
 import { KtdGridComponent, KtdGridLayout, ktdTrackById } from '@katoid/angular-grid-layout';
 import { fromEvent, merge, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -28,7 +28,7 @@ function generateLayout2(cols: number, size: number) {
 @Component({
     selector: 'ktd-scroll-test',
     templateUrl: './scroll-test.component.html',
-    styleUrls: ['./scroll-test.component.scss']
+    styleUrls: ['./scroll-test.component.scss'],
 })
 export class KtdScrollTestComponent implements OnInit, OnDestroy {
     @ViewChild('grid1', {static: true, read: KtdGridComponent}) grid1: KtdGridComponent;

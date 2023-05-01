@@ -13,3 +13,16 @@ body {
 a {
     color: #ffa726;
 }
+
+.grid-item-content {
+    box-sizing: border-box;
+    background: #ccc;
+    border: 1px solid black;
+    color: black;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

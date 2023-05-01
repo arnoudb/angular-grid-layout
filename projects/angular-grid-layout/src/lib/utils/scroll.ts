@@ -126,6 +126,7 @@ export interface KtdScrollIfNearElementOptions {
  * This observable doesn't emit, it just performs a 'scroll' side effect.
  * @param scrollableParent, parent node in which the scroll would be performed.
  * @param options, configuration options.
+ * @returns a function that returns an observable that emits scroll intentions
  */
 export function ktdScrollIfNearElementClientRect$(scrollableParent: HTMLElement | Document, options?: KtdScrollIfNearElementOptions): (source$: Observable<{ pointerX: number, pointerY: number }>) => Observable<any> {
 

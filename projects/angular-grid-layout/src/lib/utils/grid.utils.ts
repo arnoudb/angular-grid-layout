@@ -75,10 +75,11 @@ export function ktdGetGridLayoutDiff(gridLayoutA: KtdGridLayoutItem[], gridLayou
 
 /**
  * Given the grid config & layout data and the current drag position & information, returns the corresponding layout and drag item position
- * @param gridItem grid item that is been dragged
+ * @param gridItem grid item that is being dragged
  * @param config current grid configuration
  * @param compactionType type of compaction that will be performed
  * @param draggingData contains all the information about the drag
+ * @returns an object containing the new layout and the draggedItem position
  */
 export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdGridCfg, compactionType: CompactType, draggingData: KtdDraggingData): { layout: KtdGridLayoutItem[]; draggedItemPos: KtdGridItemRect } {
     const {pointerDownEvent, pointerDragEvent, gridElemClientRect, dragElemClientRect, scrollDifference} = draggingData;
@@ -125,6 +126,15 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
     const layoutItems: LayoutItem[] = config.layout;
     const draggedLayoutItem: LayoutItem = layoutItems.find(item => item.id === gridItemId)!;
 
+
+
+    // todo hier omzetten naar global
+    // dan transform aan passen
+    //this.renderer.setStyle(this.elementRef.nativeElement, 'transform', `translateX(${left}) translateY(${top})`);
+    //
+
+
+
     let newLayoutItems: LayoutItem[] = moveElement(
         layoutItems,
         draggedLayoutItem,
@@ -141,8 +151,8 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
     return {
         layout: newLayoutItems,
         draggedItemPos: {
-            top: gridRelYPos,
-            left: gridRelXPos,
+            top: gridRelYPos,// + scrollDifference.top,
+            left: gridRelXPos,// + scrollDifference.left,
             width: dragElemClientRect.width,
             height: dragElemClientRect.height,
         }
@@ -151,7 +161,7 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
 
 /**
  * Given the grid config & layout data and the current drag position & information, returns the corresponding layout and drag item position
- * @param gridItem grid item that is been dragged
+ * @param gridItem grid item that is being dragged
  * @param config current grid configuration
  * @param compactionType type of compaction that will be performed
  * @param draggingData contains all the information about the drag
