@@ -1,5 +1,11 @@
 import { Component, Inject, OnDestroy, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
-import { KtdGridComponent, KtdGridLayout, ktdTrackById } from '@katoid/angular-grid-layout';
+import {
+    KtdDragEnter, KtdDrop,
+    KtdGridComponent,
+    KtdGridLayout,
+    KtdGridLayoutItem,
+    ktdTrackById
+} from '@katoid/angular-grid-layout';
 import { fromEvent, merge, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { DOCUMENT } from '@angular/common';
@@ -12,7 +18,7 @@ function generateLayout2(cols: number, size: number) {
     for (let i = 0; i < rows; i += size) {
         for (let j = i; j < cols; j += size) {
             layout.push({
-                id: `${counter}`,
+                id: `${counter + 20}`,
                 x: j,
                 y: i,
                 w: size,
@@ -48,8 +54,6 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
         {id: '5', x: 6, y: 3, w: 3, h: 3},
         {id: '6', x: 9, y: 3, w: 3, h: 3},
         {id: '7', x: 3, y: 6, w: 3, h: 3},
-
-
         {id: '8', x: 3, y: 9, w: 3, h: 3},
         {id: '9', x: 3, y: 12, w: 3, h: 3},
         {id: '10', x: 3, y: 15, w: 3, h: 3},
@@ -81,5 +85,43 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
 
     onScrollSpeedChange(event: Event) {
         this.scrollSpeed = coerceNumberProperty((event.target as HTMLInputElement).value);
+    }
+
+    newItem:KtdGridLayoutItem;
+    dragStart(event: DragEvent) {
+        //$event.dataTransfer.setData()
+        console.log('dragStart', event)
+        this.newItem = {id: Math.random() + '', x: 3, y: 18, w: 3, h: 3};
+        event.dataTransfer?.setData("text/plain", this.newItem.id);
+    }
+
+    dragEnter(event: DragEvent) {
+        event.preventDefault();
+        console.log('dragEnter', event);
+    }
+
+    drop(event: DragEvent) {
+        event.preventDefault();
+        console.log('drop', event);
+        this.layout1 = [this.newItem, ...this.layout1];
+    }
+
+    dragOver(event: DragEvent) {
+        event.preventDefault();
+        console.log('dragOver');
+    }
+
+    onKtdDragEnter(event: KtdDragEnter) {
+        console.log('KtdDragEnter');
+        if (! this.layout1.find(e => e.id === event.layoutItem.id)) {
+            this.layout1 = [...this.layout1, event.layoutItem];
+            console.log('item added !')
+        }
+    }
+
+    onKtdDrop(event: KtdDrop) {
+        console.log('KtdDrop');
+        this.layout2 = this.layout2.filter(item => item.id !== event.layoutItem?.id);
+        console.log('item removed from origin !');
     }
 }

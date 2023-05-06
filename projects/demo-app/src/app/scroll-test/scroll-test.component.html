@@ -5,15 +5,20 @@
 <div class="grids-container">
     <div>
         <h2>Scroll Vertical</h2>
+        <!--<div class="grid-container-1" #gridContainer1 (dragenter)="dragEnter($event)" (dragover)="dragOver($event)" (drop)="drop($event)">-->
         <div class="grid-container-1" #gridContainer1>
             <ktd-grid #grid1
+                      id="grid1"
                       [cols]="cols"
                       [rowHeight]="50"
                       [layout]="layout1"
                       [scrollableParent]="gridContainer1"
                       [scrollSpeed]="scrollSpeed"
-                      [compactType]="compactType">
-                <ktd-grid-item *ngFor="let item of layout1; trackBy:trackById"
+                      [compactType]="compactType"
+                      (ktdDragEnter)="onKtdDragEnter($event)"
+                      (ktdDrop)="onKtdDrop($event)"
+                      [connectedTo]="[grid2]">
+                <ktd-grid-item *ngFor="let item of layout1"
                                [id]="item.id">
                     <div class="grid-item-content">{{item.id}}</div>
                 </ktd-grid-item>
@@ -24,12 +29,14 @@
         <h2>Scroll Vertical and horizontal</h2>
         <div class="grid-container-2" #gridContainer2>
             <ktd-grid #grid2
+                      id="grid2"
                       [cols]="cols2"
                       [rowHeight]="50"
                       [layout]="layout2"
                       [scrollableParent]="gridContainer2"
                       [scrollSpeed]="scrollSpeed"
-                      [compactType]="compactType">
+                      [compactType]="compactType"
+                      [connectedTo]="[grid1]">
                 <ktd-grid-item *ngFor="let item of layout2; trackBy:trackById"
                                [id]="item.id">
                     <div class="grid-item-content">{{item.id}}</div>
@@ -38,5 +45,14 @@
         </div>
     </div>
 </div>
+
+<!--<div style="width: 100px; height: 100px; background: green" draggable="true" (dragstart)="dragStart($event)">-->
+
+<!--</div>-->
+
+<!--<div style="width: 100px; height: 100px; background: red; margin-left: 300px" (dragenter)="dragEnter($event)" (dragover)="dragOver($event)" (drop)="drop($event)"   >-->
+
+<!--</div>-->
+
 <ktd-footer></ktd-footer>
 

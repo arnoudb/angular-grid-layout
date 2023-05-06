@@ -4,14 +4,20 @@ import {
 } from '@angular/core';
 import { coerceNumberProperty, NumberInput } from './coercion/number-property';
 import { KtdGridItemComponent } from './grid-item/grid-item.component';
-import { combineLatest, merge, NEVER, Observable, Observer, of, Subscription } from 'rxjs';
-import { exhaustMap, map, startWith, switchMap, takeUntil } from 'rxjs/operators';
-import { ktdGetGridItemRowHeight, ktdGridItemDragging, ktdGridItemLayoutItemAreEqual, ktdGridItemResizing } from './utils/grid.utils';
+import { combineLatest, fromEvent, merge, NEVER, Observable, Observer, of, Subscription } from 'rxjs';
+import { delay, exhaustMap, map, startWith, switchMap, take, takeUntil, tap } from 'rxjs/operators';
+import {
+    ktdGetGridItemRowHeight,
+    ktdGridItemDragging,
+    ktdGridItemLayoutItemAreEqual,
+    ktdGridItemResizing,
+    screenXToGridX, screenYToGridY
+} from './utils/grid.utils';
 import { compact } from './utils/react-grid-layout.utils';
 import {
     GRID_ITEM_GET_RENDER_DATA_TOKEN, KtdGridCfg, KtdGridCompactType, KtdGridItemRenderData, KtdGridLayout, KtdGridLayoutItem
 } from './grid.definitions';
-import { ktdMouseOrTouchEnd, ktdPointerClientX, ktdPointerClientY } from './utils/pointer.utils';
+import { ktdMouseOrTouchEnd, ktdPointerClient, ktdPointerClientX, ktdPointerClientY } from './utils/pointer.utils';
 import { KtdDictionary } from '../types';
 import { KtdGridService } from './grid.service';
 import { getMutableClientRect, KtdClientRect } from './utils/client-rect';
@@ -25,16 +31,27 @@ interface KtdDragResizeEvent {
     gridItemRef: KtdGridItemComponent;
 }
 
+interface KtdGridItemDragDropEvent {
+    layoutItem:KtdGridLayoutItem;
+    gridItemRef: KtdGridItemComponent | null;
+    sourceGrid: KtdGridComponent | null;
+    //targetGrid: KtdGridComponent;
+}
+
 export type KtdDragStart = KtdDragResizeEvent;
 export type KtdResizeStart = KtdDragResizeEvent;
 export type KtdDragEnd = KtdDragResizeEvent;
 export type KtdResizeEnd = KtdDragResizeEvent;
+export type KtdDragEnter = KtdGridItemDragDropEvent;
+export type KtdDragExit = KtdGridItemDragDropEvent;
+export type KtdDrop = KtdGridItemDragDropEvent;
 
 export interface KtdGridItemResizeEvent {
     width: number;
     height: number;
     gridItemRef: KtdGridItemComponent;
 }
+
 
 type DragActionType = 'drag' | 'resize';
 
@@ -109,6 +126,11 @@ export function ktdGridItemGetRenderDataFactoryFunc(gridCmp: KtdGridComponent) {
     ]
 })
 export class KtdGridComponent implements OnChanges, AfterContentInit, AfterContentChecked, OnDestroy {
+    protected static  draggedItem: KtdGridItemComponent | null = null;
+    protected static  draggedItemSourceGrid: KtdGridComponent | null = null;
+    protected static  draggedItemTargetGrid: KtdGridComponent | null = null;
+
+
     /** Query list of grid items that are being rendered. */
     @ContentChildren(KtdGridItemComponent, {descendants: true}) _gridItems: QueryList<KtdGridItemComponent>;
 
@@ -129,6 +151,17 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
 
     /** Emits when a grid item is being resized and its bounds have changed */
     @Output() gridItemResize: EventEmitter<KtdGridItemResizeEvent> = new EventEmitter<KtdGridItemResizeEvent>();
+
+    /** drag enter */
+    @Output() ktdDragEnter: EventEmitter<KtdDragEnter> = new EventEmitter<KtdDragEnter>();
+
+    /** drag exit */
+    @Output() ktdDragExit: EventEmitter<KtdDragExit> = new EventEmitter<KtdDragExit>();
+
+    /** drop */
+    @Output() ktdDrop: EventEmitter<KtdDrop> = new EventEmitter<KtdDrop>();
+
+    @Input() connectedTo: KtdGridComponent[] = [];
 
     /**
      * Parent element that contains the scroll. If an string is provided it would search that element by id on the dom.
@@ -217,9 +250,11 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
          * it is re-binded on the input.
          */
         this._layout = layout;
+        this._originalLayout = layout;
     }
 
     private _layout: KtdGridLayout;
+    private _originalLayout: KtdGridLayout;
 
     /** Grid gap in css pixels */
     @Input()
@@ -277,6 +312,141 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                 private renderer: Renderer2,
                 private ngZone: NgZone) {
 
+        fromEvent(this.elementRef.nativeElement, 'mouseenter').pipe(delay(0)).subscribe((mouseEvent:MouseEvent) => {
+            KtdGridComponent.draggedItemTargetGrid = this;
+            if (KtdGridComponent.draggedItem !== null
+                && KtdGridComponent.draggedItemTargetGrid !== KtdGridComponent.draggedItemSourceGrid
+                && KtdGridComponent.draggedItemSourceGrid) {
+
+                const sourceLayout = KtdGridComponent.draggedItemSourceGrid.layout;
+                const layoutItemToMove = sourceLayout.find(i => i.id === KtdGridComponent.draggedItem!.id);
+                const updatedSourceLayout = sourceLayout.filter(i => i.id !== KtdGridComponent.draggedItem!.id);
+
+                if (layoutItemToMove) {
+
+                    const newLayoutItem = {...layoutItemToMove};
+
+                    // get update coords
+                    const coords = ktdPointerClient(mouseEvent);
+                    //const proxy = (<HTMLElement>document.getElementById('ktd-drag-proxy-element')).getBoundingClientRect();
+                    //const coords = { clientX: c, clientY: proxy.top };
+
+                    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+
+                    // todo fix scrolling thingie
+                    const x = coords.clientX - rect.left + (<HTMLElement>this.scrollableParent)?.scrollLeft ?? 0;
+                    const y = coords.clientY - rect.top + (<HTMLElement>this.scrollableParent)?.scrollTop ?? 0;
+
+                    console.log(x, y);
+
+                    // get proxy offset
+
+                    //const pxoffset =
+
+                    // todo row height
+                    const rowHeight = this._rowHeight === 'fit' ? 20 : this._rowHeight;
+                    const x2 = screenXToGridX(x, this._cols, rect.width, this._gap);
+                    const y2 = screenYToGridY(y, rowHeight, rect.height, this._gap);
+
+                    console.log(x2, y2);
+                    newLayoutItem.x = x2;
+                    newLayoutItem.y = y2;
+
+                    const dragEnter:KtdDragEnter = {
+                        layoutItem: newLayoutItem,
+                        gridItemRef: KtdGridComponent.draggedItem, // todo
+                        sourceGrid: KtdGridComponent.draggedItemSourceGrid
+                    }
+                    this.ktdDragEnter.emit(dragEnter);
+
+                    // const t = `translateX(${x}) translateY(${y}) !important`;
+                    // const yy = KtdGridComponent.draggedItemSourceGrid._gridItems.get(0)
+                    // if (yy) {
+                    //     yy.elementRef.nativeElement.style.top = '20px';
+                    // }
+
+                    // callback
+
+
+                    //KtdGridComponent.draggedItem.elementRef.nativeElement.style.transform = t;
+
+                    setTimeout(() => {
+                        //console.log(t);
+                        console.log(`translateX(${x}) translateY(${y})`)
+                        // create item on original layout
+                        const gridItem: KtdGridItemComponent|undefined = this._gridItems.find(e => e.id === newLayoutItem.id)
+
+                        // next with a little delay
+                        if (gridItem) {
+                            this.renderer.addClass(gridItem.elementRef.nativeElement, 'no-transitions');
+                            this.renderer.addClass(gridItem.elementRef.nativeElement, 'ktd-grid-item-dragging');
+                            gridItem.elementRef.nativeElement.style.transform = `translateX(${x}) translateY(${y})`;
+
+                            //gridItem.elementRef.nativeElement.style.top = y + 'px';
+                            //gridItem.elementRef.nativeElement.style.left = x + 'px';
+                            //console.log(gridItem.elementRef.nativeElement.style.transform);
+                            this.performDragSequence$(gridItem, mouseEvent, 'drag').pipe(
+                                take(1),
+                                map((layout) => ({layout, gridItem, type:'drag'}))).subscribe((x) => {
+                                    console.log(x.gridItem);
+                                    // gridItem.elementRef.nativeElement.style.transform = t;
+                                    // gridItem.elementRef.nativeElement.x = x;
+                                    // gridItem.elementRef.nativeElement.y = y;
+                                    // KtdGridComponent.draggedItem = gridItem;
+                                }
+                            );
+                        } else {
+                            console.log('no grid item!!!');
+                        }
+                    }, 10);
+
+
+                    // console.log('conditions are ok to move')
+                    // //KtdGridComponent.draggedItemSourceGrid.layout = updatedSourceLayout;
+                    // console.log({...layoutItemToMove})
+                    // KtdGridComponent.draggedItemTargetGrid.layout = [<KtdGridLayoutItem>{...layoutItemToMove, moved: true}, ...KtdGridComponent.draggedItemTargetGrid.layout];
+                    // KtdGridComponent.draggedItemTargetGrid._originalLayout.push(<KtdGridLayoutItem>{...layoutItemToMove, moved: true});// = [, ...KtdGridComponent.draggedItemTargetGrid.layout];
+                    //
+                    //
+                    //
+                    // //KtdGridComponent.draggedItemSourceGrid.calculateRenderData();
+                    // KtdGridComponent.draggedItemTargetGrid.compactLayout();
+                    // KtdGridComponent.draggedItemTargetGrid.calculateRenderData();
+                    //
+                    // KtdGridComponent.draggedItemId = '';
+                    //
+                    // console.log( KtdGridComponent.draggedItemTargetGrid.layout)
+                    //
+                    // this.layoutUpdated.emit(KtdGridComponent.draggedItemTargetGrid.layout);
+                }
+            }
+        })
+
+        this.elementRef.nativeElement.addEventListener('mouseleave', () => {
+            console.log('mouseLeave');
+        })
+
+        this.elementRef.nativeElement.addEventListener('mouseup', () => {
+
+            if (KtdGridComponent.draggedItemSourceGrid !== null && KtdGridComponent.draggedItemTargetGrid === this) {
+                console.log('mouseUp in target grid');
+                const dragDrop:KtdDrop = {
+                    sourceGrid: KtdGridComponent.draggedItemSourceGrid,
+                    gridItemRef: KtdGridComponent.draggedItem,
+                    layoutItem: KtdGridComponent.draggedItemSourceGrid.layout.find(i => i.id === KtdGridComponent.draggedItem!.id)!,
+                }
+                this.ktdDrop.emit(dragDrop);
+            }
+        })
+    }
+
+    addItem(item?:KtdGridLayoutItem):void {
+        if (item) {
+            this.layout = [item, ...this.layout];
+            this.ngOnChanges({})
+        } else {
+            console.log('no item!');
+        }
     }
 
     ngOnChanges(changes: SimpleChanges) {
@@ -356,14 +526,29 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
             const gridItemRenderData: KtdGridItemRenderData<number> | undefined = this._gridItemsRenderData[item.id];
             if (gridItemRenderData == null) {
                 console.error(`Couldn\'t find the specified grid item for the id: ${item.id}`);
-            } else {
+            } else if (item !== KtdGridComponent.draggedItem || true) {
                 item.setStyles(parseRenderItemToPixels(gridItemRenderData));
+            } else {
+                // const proxy = (<HTMLElement>document.getElementById('ktd-drag-proxy-element')).getBoundingClientRect();
+                // const rect = this.elementRef.nativeElement.getBoundingClientRect();
+                // const left = proxy.left - rect.left + (<HTMLElement>this.scrollableParent)?.scrollLeft ?? 0;
+                // const top = proxy.top - rect.top + (<HTMLElement>this.scrollableParent)?.scrollTop ?? 0;
+                // const width = KtdGridComponent.draggedItem.elementRef.nativeElement.offsetWidth;
+                // const height = KtdGridComponent.draggedItem.elementRef.nativeElement.offsetWidth;
+                // const id = KtdGridComponent.draggedItem.id;
+                // item.setStyles(parseRenderItemToPixels({left, top, height, width, id}))
             }
         });
     }
 
     private initSubscriptions() {
         this.subscriptions = [
+
+            this._gridItems.changes.subscribe((x) => {
+                //console.log(this.elementRef.nativeElement.id, x);
+            }),
+
+
             this._gridItems.changes.pipe(
                 startWith(this._gridItems),
                 switchMap((gridItems: QueryList<KtdGridItemComponent>) => {
@@ -374,8 +559,19 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                         // Emit drag or resize start events. Ensure that is start event is inside the zone.
                         this.ngZone.run(() => (type === 'drag' ? this.dragStarted : this.resizeStarted).emit(getDragResizeEventData(gridItem, this.layout)));
 
+                        //console.log(this.elementRef.nativeElement.id)
+
+                        // todo
+                        const x = this.connectedTo[0].ktdDragEnter;
+                        const y = this.connectedTo[0].ktdDrop;
+
+                        KtdGridComponent.draggedItem = gridItem;
+                        KtdGridComponent.draggedItemSourceGrid = this;
+
                         // Perform drag sequence
                         return this.performDragSequence$(gridItem, event, type).pipe(
+                                takeUntil(x),
+                            tap(x => {console.log('??????', x)}),
                             map((layout) => ({layout, gridItem, type})));
 
                     }));
@@ -389,7 +585,6 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                 // Notify that the layout has been updated.
                 this.layoutUpdated.emit(layout);
             })
-
         ];
     }
 
@@ -407,54 +602,85 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
             const gridElemClientRect: KtdClientRect = getMutableClientRect(this.elementRef.nativeElement as HTMLElement);
             const dragElemClientRect: KtdClientRect = getMutableClientRect(gridItem.elementRef.nativeElement as HTMLElement);
 
+
+            // dragElemClientRect.left -= 50;
+            // dragElemClientRect.top += 150;
+
             const scrollableParent = typeof this.scrollableParent === 'string' ? document.getElementById(this.scrollableParent) as HTMLElement : this.scrollableParent as HTMLElement;
 
-            // Lift the dragged item out of the grid sto be able to drag it outside the grid boundaries.
-            // This also makes sure its always on top of any other element.
-            // Here we also correct the global position it stays visually exactly on the same location.
-            //document.getElementById('draggedgriditem') !== null &&
-            if (document.getElementById('draggedgriditem') === null && type === 'drag') {
+            // KtdGridComponent.draggedItem = gridItem;
+            // KtdGridComponent.draggedItemSourceGrid = this;
 
-                const dragProxy = gridItem.elementRef.nativeElement.cloneNode(true);
+            // Create a dragproxy
+            // We clone the dragged item and move it out of the grid to be able to drag it outside the grid boundaries.
+            // This also makes sure it's always on top of any other element.
+            // Here we also correct the global position it stays visually exactly on the same location.
+            if (document.getElementById('ktd-drag-proxy-element') === null && type === 'drag') {
+
+                // const dragProxy = document.createElement('div');
+                // dragProxy.classList.add('ktd-grid-item')
+                // const child = <HTMLElement>gridItem.elementRef.nativeElement.querySelector('.grid-item-content')?.cloneNode(true);
+                // dragProxy.appendChild(child);
+                // dragProxy.setAttribute('style', gridItem.elementRef.nativeElement.getAttribute('style'));
+
                 const renderData = this.getItemRenderData(gridItem.id);
-                console.log(renderData)
-                console.log('renderData', renderData);
+                const dragProxy = gridItem.elementRef.nativeElement.cloneNode(true);
                 document.body.appendChild(dragProxy);
-                dragProxy.id = 'draggedgriditem';
+                dragProxy.id = 'ktd-drag-proxy-element';
+                dragProxy.draggable = true;
                 dragProxy.style.position = 'absolute';
-                dragProxy.style.zIndex = 1000;
+                dragProxy.style.zIndex = '1000';
                 dragProxy.style.pointerEvents = 'none';
                 dragProxy.style.transform = ''; // replaced by absolute position
+
+                // set initial absolute position
                 dragProxy.style.top = (gridElemClientRect.top + renderData.top + window.scrollY) + 'px';
                 dragProxy.style.left = (gridElemClientRect.left + renderData.left + window.scrollX) + 'px';
-                console.log(dragProxy.style.top, dragProxy.style.left,  window.scrollY, window.scrollX, gridElemClientRect.top, renderData.top);
 
-                // dragProxy.dragEnded = true;
-                // dragProxy.st
-                console.log(dragProxy.style.top, (<MouseEvent>pointerDownEvent).clientY + window.scrollY);
-                const deltaX = ((<MouseEvent>pointerDownEvent).clientX + window.scrollX) - (gridElemClientRect.left + renderData.left + window.scrollX);
-                const deltaY = ((<MouseEvent>pointerDownEvent).clientY + window.scrollY) - (gridElemClientRect.top + renderData.top + window.scrollY);
-                const update = (event:MouseEvent) => {
+                //
+                const deltaX = ((<MouseEvent>pointerDownEvent).clientX) - (gridElemClientRect.left + renderData.left);
+                const deltaY = ((<MouseEvent>pointerDownEvent).clientY) - (gridElemClientRect.top + renderData.top);
 
+                const update = (event: MouseEvent) => {
                     dragProxy.style.left = (event.clientX + window.scrollX - deltaX) + 'px';
                     dragProxy.style.top = (event.clientY + window.scrollY - deltaY) + 'px';
-
-                   // console.log(event.clientX)
-                    console.log(deltaX, deltaY, dragProxy.style.left, dragProxy.style.top)
-                    window.addEventListener('mouseup', () => {
-                        window.removeEventListener('mousemove', update);
-                        //event
-                    });
                 }
 
                 window.addEventListener('mousemove', update);
+                window.addEventListener('mouseup', () => {
+                    window.removeEventListener('mousemove', update);
+                    this.renderer.removeClass(dragProxy, 'no-transitions');
 
+                    const newGridItemRenderData = {...this._gridItemsRenderData[gridItem.id]};
 
-                gridItem.elementRef.nativeElement.style.opacity = .5;
+                    //console.log(newGridItemRenderData, this.elementRef.nativeElement.getBoundingClientRect())
+
+                    newGridItemRenderData.left = newGridItemRenderData.left
+                        + this.elementRef.nativeElement.getBoundingClientRect().left
+                        - dragProxy.getBoundingClientRect().left;
+
+                    newGridItemRenderData.top = newGridItemRenderData.top
+                        + this.elementRef.nativeElement.getBoundingClientRect().top
+                        - dragProxy.getBoundingClientRect().top;
+
+                    // set proxy goal position
+                    const positionStyles = parseRenderItemToPixels(newGridItemRenderData);
+                    dragProxy.style.transform = `translateX(${positionStyles.left}) translateY(${positionStyles.top})`;
+
+                    const transitionEndHandler = (event:Event) => {
+                        gridItem.elementRef.nativeElement.removeEventListener('transitionend', transitionEndHandler);
+                        const dragProxyElement = <HTMLElement>document.getElementById('ktd-drag-proxy-element');
+                        dragProxyElement.remove();
+                        gridItem.elementRef.nativeElement.style.opacity = 1;
+                    };
+
+                    dragProxy.addEventListener('transitionend', transitionEndHandler);
+                });
+
+                gridItem.elementRef.nativeElement.style.opacity = 0;
             } else {
-                //console.log(dragProxy.top, dragProxy.left,  window.scrollY, window.scrollX);
+                console.log('this is not ok, something is wrong with the dragproxy!!');
             }
-            console.log('??')
 
             this.renderer.addClass(gridItem.elementRef.nativeElement, 'no-transitions');
             this.renderer.addClass(gridItem.elementRef.nativeElement, 'ktd-grid-item-dragging');
@@ -485,7 +711,6 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
             /**
              * Main subscription, it listens for 'pointer move' and 'scroll' events and recalculates the layout on each emission
              */
-            let scrollDifferenceStore:{ top: number, left: number };
             const subscription = this.ngZone.runOutsideAngular(() =>
                 merge(
                     combineLatest([
@@ -500,7 +725,6 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                     takeUntil(ktdMouseOrTouchEnd(document)),
                 ).subscribe(([pointerDragEvent, scrollDifference]: [MouseEvent | TouchEvent, { top: number, left: number }]) => {
                         pointerDragEvent.preventDefault();
-                        scrollDifferenceStore = scrollDifference;
 
                         /**
                          * Set the new layout to be the layout in which the calcNewStateFunc would be executed.
@@ -508,6 +732,10 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                          * some utilities from 'react-grid-layout' would not work as expected.
                          */
                         const currentLayout: KtdGridLayout = newLayout || this.layout;
+
+                        //console.log(newLayout, this.layout)
+                        //console.log(this.elementRef.nativeElement.id);
+
 
                         // Get the correct newStateFunc depending on if we are dragging or resizing
                         const calcNewStateFunc = type === 'drag' ? ktdGridItemDragging : ktdGridItemResizing;
@@ -528,6 +756,8 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                         });
                         newLayout = layout;
 
+                        //console.log(newLayout)
+
                         this.gridCurrentHeight = this.height ?? (this.rowHeight === 'fit' ? gridElemClientRect.height : getGridHeight(newLayout, this.rowHeight, this.gap))
 
                         this._gridItemsRenderData = layoutToRenderItems({
@@ -547,11 +777,29 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                         this.placeholder!.style.height = placeholderStyles.height;
                         this.placeholder!.style.transform = `translateX(${placeholderStyles.left}) translateY(${placeholderStyles.top})`;
 
+                        //this.placeholder!.scrollIntoView({behavior: 'smooth'});
 
 
-                        // modify the position of the dragged item to be the once we want (for example the mouse position or whatever)
+
+                        const proxy = (<HTMLElement>document.getElementById('ktd-drag-proxy-element')).getBoundingClientRect();
+                        const rect = this.elementRef.nativeElement.getBoundingClientRect();
+                        let left = proxy.left - rect.left + (<HTMLElement>this.scrollableParent)?.scrollLeft ?? 0;
+                        let top = proxy.top - rect.top + (<HTMLElement>this.scrollableParent)?.scrollTop ?? 0;
+                        //const width = KtdGridComponent.draggedItem.elementRef.nativeElement.offsetWidth;
+                        //const height = KtdGridComponent.draggedItem.elementRef.nativeElement.offsetWidth;
+                        //const id = KtdGridComponent.draggedItem.id;
+                        //item.setStyles(parseRenderItemToPixels({left, top, height, width, id}))
+
+                        if (KtdGridComponent.draggedItem === gridItem) {
+                            left = draggedItemPos.left;
+                            top = draggedItemPos.top;
+                        }
+
+                        // modify the position of the dragged item to be the one we want (for example the mouse position or whatever)
                         this._gridItemsRenderData[gridItem.id] = {
                             ...draggedItemPos,
+                            left,
+                            top,
                             id: this._gridItemsRenderData[gridItem.id].id
                         };
 
@@ -575,24 +823,6 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                     (error) => observer.error(error),
                     () => {
                         this.ngZone.run(() => {
-
-                           document.getElementById('draggedgriditem')?.remove();
-                            gridItem.elementRef.nativeElement.style.display = 'block';
-
-                            // restore the dragged item, do it on `transitionend` so we animate in a top layer
-                            // visually above all other ui.
-                            // TODO check if we actually have a transition, otherwise this may not work
-                            //gridItem.elementRef.nativeElement.style.top = scrollDifferenceStore.top;
-                            //gridItem.elementRef.nativeElement.style.left = scrollDifferenceStore.left;
-                            // gridItem.elementRef.nativeElement.addEventListener('transitionend', (event) => {
-                            //     this.elementRef.nativeElement.appendChild(gridItem.elementRef.nativeElement);
-                            //     gridItem.elementRef.nativeElement.style.position = 'absolute';
-                            //     gridItem.elementRef.nativeElement.style.top = 0;
-                            //     gridItem.elementRef.nativeElement.style.left = 0;
-                            //     //gridItem.elementRef.nativeElement.style.transform = `translateX(-500px) translateY(-500px)`;
-                            //     gridItem.elementRef.nativeElement.id = '';
-                            // });
-
                             // Remove drag classes
                             this.renderer.removeClass(gridItem.elementRef.nativeElement, 'no-transitions');
                             this.renderer.removeClass(gridItem.elementRef.nativeElement, 'ktd-grid-item-dragging');
@@ -615,7 +845,7 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
                                 })) as KtdGridLayout);
                             } else {
                                 // TODO: Need we really to emit if there is no layout change but drag started and ended?
-                                observer.next(this.layout);
+                                //observer.next(this.layout);
                             }
 
                             observer.complete();
@@ -633,6 +863,9 @@ export class KtdGridComponent implements OnChanges, AfterContentInit, AfterConte
 
     /** Creates placeholder element */
     private createPlaceholderElement(clientRect: KtdClientRect, gridItemPlaceholder?: KtdGridItemPlaceholder) {
+        if (this.placeholder) {
+            this.placeholder.remove();
+        }
         this.placeholder = this.renderer.createElement('div');
         this.placeholder!.style.width = `${clientRect.width}px`;
         this.placeholder!.style.height = `${clientRect.height}px`;

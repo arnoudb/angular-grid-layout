@@ -6,7 +6,7 @@ import { ktdPointerClientX, ktdPointerClientY } from './pointer.utils';
 import { KtdDictionary } from '../../types';
 import { KtdGridItemComponent } from '../grid-item/grid-item.component';
 
-/** Tracks items by id. This function is mean to be used in conjunction with the ngFor that renders the 'ktd-grid-items' */
+/** Tracks items by id. This function is meant to be used in conjunction with the ngFor that renders the 'ktd-grid-items' */
 export function ktdTrackById(index: number, item: {id: string}) {
     return item.id;
 }
@@ -31,7 +31,7 @@ export function ktdGridCompact(layout: KtdGridLayout, compactType: KtdGridCompac
         .map(item => ({ id: item.id, x: item.x, y: item.y, w: item.w, h: item.h, minW: item.minW, minH: item.minH, maxW: item.maxW, maxH: item.maxH }));
 }
 
-function screenXToGridX(screenXPos: number, cols: number, width: number, gap: number): number {
+export function screenXToGridX(screenXPos: number, cols: number, width: number, gap: number): number {
     const widthMinusGaps = width - (gap * (cols - 1));
     const itemWidth = widthMinusGaps / cols;
     const widthMinusOneItem = width - itemWidth;
@@ -39,7 +39,7 @@ function screenXToGridX(screenXPos: number, cols: number, width: number, gap: nu
     return Math.round(screenXPos / colWidthWithGap);
 }
 
-function screenYToGridY(screenYPos: number, rowHeight: number, height: number, gap: number): number {
+export function screenYToGridY(screenYPos: number, rowHeight: number, height: number, gap: number): number {
     return Math.round(screenYPos / (rowHeight + gap));
 }
 
@@ -126,15 +126,6 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
     const layoutItems: LayoutItem[] = config.layout;
     const draggedLayoutItem: LayoutItem = layoutItems.find(item => item.id === gridItemId)!;
 
-
-
-    // todo hier omzetten naar global
-    // dan transform aan passen
-    //this.renderer.setStyle(this.elementRef.nativeElement, 'transform', `translateX(${left}) translateY(${top})`);
-    //
-
-
-
     let newLayoutItems: LayoutItem[] = moveElement(
         layoutItems,
         draggedLayoutItem,
@@ -151,8 +142,8 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
     return {
         layout: newLayoutItems,
         draggedItemPos: {
-            top: gridRelYPos,// + scrollDifference.top,
-            left: gridRelXPos,// + scrollDifference.left,
+            top: gridRelYPos,
+            left: gridRelXPos,
             width: dragElemClientRect.width,
             height: dragElemClientRect.height,
         }
