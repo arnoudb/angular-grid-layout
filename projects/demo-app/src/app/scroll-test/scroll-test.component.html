@@ -15,7 +15,7 @@
                       [scrollableParent]="gridContainer1"
                       [scrollSpeed]="scrollSpeed"
                       [compactType]="compactType"
-                      (ktdDragEnter)="onKtdDragEnter($event)"
+                      (ktdDragEnter)="onKtdDragEnterGrid1($event)"
                       (ktdDrop)="onKtdDrop($event)"
                       [connectedTo]="[grid2]">
                 <ktd-grid-item *ngFor="let item of layout1"
@@ -36,6 +36,7 @@
                       [scrollableParent]="gridContainer2"
                       [scrollSpeed]="scrollSpeed"
                       [compactType]="compactType"
+                      (ktdDragEnter)="onKtdDragEnterGrid2($event)"
                       [connectedTo]="[grid1]">
                 <ktd-grid-item *ngFor="let item of layout2; trackBy:trackById"
                                [id]="item.id">

@@ -53,9 +53,9 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
         {id: '4', x: 3, y: 3, w: 3, h: 3},
         {id: '5', x: 6, y: 3, w: 3, h: 3},
         {id: '6', x: 9, y: 3, w: 3, h: 3},
-        {id: '7', x: 3, y: 6, w: 3, h: 3},
-        {id: '8', x: 3, y: 9, w: 3, h: 3},
-        {id: '9', x: 3, y: 12, w: 3, h: 3},
+        {id: '7', x: 9, y: 6, w: 3, h: 3},
+        {id: '8', x: 9, y: 9, w: 3, h: 3},
+        {id: '9', x: 9, y: 12, w: 3, h: 3},
         {id: '10', x: 3, y: 15, w: 3, h: 3},
         {id: '11', x: 3, y: 18, w: 3, h: 3}
     ];
@@ -111,16 +111,28 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
         console.log('dragOver');
     }
 
-    onKtdDragEnter(event: KtdDragEnter) {
-        console.log('KtdDragEnter');
+    // todo we want to handle this in the grid
+    // this is more for visual feedback etc
+    onKtdDragEnterGrid1(event: KtdDragEnter) {
+        console.log('KtdDragEnter grid 1');
         if (! this.layout1.find(e => e.id === event.layoutItem.id)) {
-            this.layout1 = [...this.layout1, event.layoutItem];
-            console.log('item added !')
+            this.layout1 = [...this.layout1, {...event.layoutItem}];
+            console.log('item added to grid1 layout, hack, we should handle this inside the grid!')
+        }
+    }
+
+    // todo we want to handle this in the grid
+    // this is more for visual feedback etc
+    onKtdDragEnterGrid2(event: KtdDragEnter) {
+        console.log('KtdDragEnter grid 2');
+        if (! this.layout2.find(e => e.id === event.layoutItem.id)) {
+            this.layout2 = [...this.layout2, {...event.layoutItem}];
+            console.log('item added to grid2 layout, hack, we should handle this inside the grid!')
         }
     }
 
     onKtdDrop(event: KtdDrop) {
-        console.log('KtdDrop');
+        console.log('KtdDrop here we should add it not earlier....');
         this.layout2 = this.layout2.filter(item => item.id !== event.layoutItem?.id);
         console.log('item removed from origin !');
     }
