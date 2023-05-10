@@ -1,6 +1,7 @@
 import { Component, Inject, OnDestroy, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
 import {
-    KtdDragEnter, KtdDrop,
+    KtdDragEnter,
+    KtdDrop,
     KtdGridComponent,
     KtdGridLayout,
     KtdGridLayoutItem,
@@ -44,7 +45,7 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
     cols = 12;
     rowHeight = 50;
     compactType: 'vertical' | 'horizontal' | null = 'vertical';
-    scrollSpeed = 2;
+    scrollSpeed = 10;
     layout1: KtdGridLayout = [
         {id: '0', x: 0, y: 0, w: 3, h: 3},
         {id: '1', x: 3, y: 0, w: 3, h: 3},
@@ -116,8 +117,8 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
     onKtdDragEnterGrid1(event: KtdDragEnter) {
         console.log('KtdDragEnter grid 1');
         if (! this.layout1.find(e => e.id === event.layoutItem.id)) {
-            this.layout1 = [...this.layout1, {...event.layoutItem}];
-            console.log('item added to grid1 layout, hack, we should handle this inside the grid!')
+            //this.layout1 = [...this.layout1, {...event.layoutItem}];
+            console.log('item NOT added to grid1 layout, hack, we should handle this inside the grid!')
         }
     }
 
@@ -126,14 +127,22 @@ export class KtdScrollTestComponent implements OnInit, OnDestroy {
     onKtdDragEnterGrid2(event: KtdDragEnter) {
         console.log('KtdDragEnter grid 2');
         if (! this.layout2.find(e => e.id === event.layoutItem.id)) {
-            this.layout2 = [...this.layout2, {...event.layoutItem}];
+            //this.layout2 = [...this.layout2, {...event.layoutItem}];
             console.log('item added to grid2 layout, hack, we should handle this inside the grid!')
         }
     }
 
-    onKtdDrop(event: KtdDrop) {
+    onKtdDrop1(event: KtdDrop) {
         console.log('KtdDrop here we should add it not earlier....');
         this.layout2 = this.layout2.filter(item => item.id !== event.layoutItem?.id);
+        this.layout1 = event.newTargetLayout ?? this.layout1;
+        console.log('item removed from origin !');
+    }
+
+    onKtdDrop2(event: KtdDrop) {
+        console.log('KtdDrop here we should add it not earlier....');
+        this.layout1 = this.layout1.filter(item => item.id !== event.layoutItem?.id);
+        this.layout2 = [...this.layout2, {...event.layoutItem}];
         console.log('item removed from origin !');
     }
 }

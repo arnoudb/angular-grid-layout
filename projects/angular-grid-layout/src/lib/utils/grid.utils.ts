@@ -5,6 +5,7 @@ import {
 import { ktdPointerClientX, ktdPointerClientY } from './pointer.utils';
 import { KtdDictionary } from '../../types';
 import { KtdGridItemComponent } from '../grid-item/grid-item.component';
+import { KtdGridComponent } from "../grid.component";
 
 /** Tracks items by id. This function is meant to be used in conjunction with the ngFor that renders the 'ktd-grid-items' */
 export function ktdTrackById(index: number, item: {id: string}) {
@@ -88,10 +89,19 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
 
     const draggingElemPrevItem = config.layout.find(item => item.id === gridItemId)!;
 
+     if (gridItem.id === KtdGridComponent.NEW_LAYOUT_ITEM_ID) {
+         //debugger;
+     }
+    // here we add the bitch?
+    //console.log('gridItem.id', gridItem.id)
+
+
     const clientStartX = ktdPointerClientX(pointerDownEvent);
     const clientStartY = ktdPointerClientY(pointerDownEvent);
     const clientX = ktdPointerClientX(pointerDragEvent);
     const clientY = ktdPointerClientY(pointerDragEvent);
+
+    //console.log('events', clientStartX, clientStartY, clientX, clientY)
 
     const offsetX = clientStartX - dragElemClientRect.left;
     const offsetY = clientStartY - dragElemClientRect.top;
@@ -101,8 +111,8 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
     const gridElementTopPosition = gridElemClientRect.top + scrollDifference.top;
 
     // Calculate position relative to the grid element.
-    const gridRelXPos = clientX - gridElementLeftPosition - offsetX;
-    const gridRelYPos = clientY - gridElementTopPosition - offsetY;
+    const gridRelXPos = clientX - gridElementLeftPosition - offsetX;// + KtdGridComponent.correction?.left ?? 0;
+    const gridRelYPos = clientY - gridElementTopPosition - offsetY;// + KtdGridComponent.correction?.top ?? 0;
 
     const rowHeightInPixels = config.rowHeight === 'fit'
         ? ktdGetGridItemRowHeight(config.layout, config.height ?? gridElemClientRect.height, config.gap)
@@ -115,6 +125,13 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
         y: screenYToGridY(gridRelYPos, rowHeightInPixels, gridElemClientRect.height, config.gap)
     };
 
+    //test
+    // layoutItem.x = 5;
+    // layoutItem.y = 5;
+
+    //console.log('layoutItem', layoutItem)
+
+
     // Correct the values if they overflow, since 'moveElement' function doesn't do it
     layoutItem.x = Math.max(0, layoutItem.x);
     layoutItem.y = Math.max(0, layoutItem.y);
@@ -122,9 +139,15 @@ export function ktdGridItemDragging(gridItem: KtdGridItemComponent, config: KtdG
         layoutItem.x = Math.max(0, config.cols - layoutItem.w);
     }
 
+
+    // now make sure we add it here again!!!!
+
+
     // Parse to LayoutItem array data in order to use 'react.grid-layout' utils
     const layoutItems: LayoutItem[] = config.layout;
     const draggedLayoutItem: LayoutItem = layoutItems.find(item => item.id === gridItemId)!;
+
+    //console.log('draggedLayoutItem', draggedLayoutItem)
 
     let newLayoutItems: LayoutItem[] = moveElement(
         layoutItems,
